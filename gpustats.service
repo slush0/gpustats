@@ -1,0 +1,16 @@
+[Unit]
+Description=Gpu stats
+Documentation=https://github.com/slush0/gpustats
+
+[Service]
+Type=notify
+User=<username>
+ExecStart=/usr/local/bin/gpustats.py
+Restart=on-failure
+RestartSec=10s
+WorkingDirectory=/var/lib/gpustats/
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
