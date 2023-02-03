@@ -6,7 +6,7 @@ import psutil
 import sqlite3
 from filelock import FileLock, Timeout
 
-DELAY=1 # seconds
+DELAY=10 # seconds
 
 def prepare_db(cur):
     cur.execute("""CREATE TABLE IF NOT EXISTS gpu
@@ -97,18 +97,16 @@ def main():
 
     print(f"Starting {__file__}...")
     db = sqlite3.connect("gpustats.db")
-    cur = db.cursor()
-    prepare_db(cur)
+    prepare_db(db)
 
     while True:
         try:
             start = time.time()
             proc, gpu = gpustats()
 
-            store_proc(proc, int(start), cur)
-            store_gpu(gpu, int(start), cur)
+            store_proc(proc, int(start), db)
+            store_gpu(gpu, int(start), db)
             db.commit()
-            db.execute("BEGIN")
 
             #print("Request took %.03f sec" % (time.time() - start))
             #pprint(proc)
