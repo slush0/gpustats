@@ -4,6 +4,7 @@ import subprocess
 from pprint import pprint
 import psutil
 import sqlite3
+from filelock import FileLock, Timeout
 
 DELAY=1 # seconds
 
@@ -17,9 +18,18 @@ def prepare_db(cur):
                     (timestamp INT, gpuid INT, pid INT,
                     mem_alloc_mb INT, user CHAR)""")
 
+def store_proc(proc: list, timestamp: int, cur: any):
+    cur.executemany(f"""INSERT INTO proc VALUES({timestamp},
+        :gpuid, :pid, :mem_alloc_mb, :user)""", proc)
+
+def store_gpu(gpu: list, timestamp: int, cur: any):
+    cur.executemany(f"""INSERT INTO gpu VALUES({timestamp},
+        :gpuid, :power_use, :power_max,
+        :mem_alloc_mb, :mem_total_mb, :util)""", gpu)
+
 def gpustats():
     """Original idea https://github.com/serengil/gpuutils"""
-    cards = {}
+    gpus = []
     processes = []
     try:
         result = subprocess.check_output(['nvidia-smi']) #result is bytes
@@ -61,6 +71,7 @@ def gpustats():
             available_memory = total_memory - allocated
 
             item = {
+                'gpuid': gpu_idx,
                 'power_use': power_usage,
                 'power_max': power_capacity,
                 'mem_use_perc': round(100*int(allocated)/int(total_memory), 1),
@@ -69,14 +80,22 @@ def gpustats():
                 'mem_total_mb': total_memory,
                 'util': utilization_info
             }
-            cards[gpu_idx] = item
+            gpus.append(item)
             gpu_idx = gpu_idx + 1
     except Exception as err:
         print("there are no GPUs on your system (", str(err), ")")
 
-    return (processes, cards)
+    return (processes, gpus)
 
 def main():
+    try:
+        fl = FileLock('.lock', timeout=1)
+        fl.acquire()
+    except Timeout:
+        print(f"Lockfile found, {__file__} is already running.")
+        return
+
+    print(f"Starting {__file__}...")
     db = sqlite3.connect("gpustats.db")
     cur = db.cursor()
     prepare_db(cur)
@@ -84,11 +103,16 @@ def main():
     while True:
         try:
             start = time.time()
-            procs, gpus = gpustats()
+            proc, gpu = gpustats()
 
-            print("Request took %.03f sec" % (time.time() - start))
-            pprint(procs)
-            pprint(gpus)
+            store_proc(proc, int(start), cur)
+            store_gpu(gpu, int(start), cur)
+            db.commit()
+            db.execute("BEGIN")
+
+            #print("Request took %.03f sec" % (time.time() - start))
+            #pprint(proc)
+            #pprint(gpu)
 
         except Exception as e:
             print(e)
