@@ -18,14 +18,14 @@ def prepare_db(cur):
                     (timestamp INT, gpuid INT,
                     power_use INT, power_max INT,
                     mem_alloc INT, mem_total INT,
-                    util INT, fan INT, temp INT)""")
+                    util INT, fan INT, temp INT, mode CHAR)""")
     cur.execute("""CREATE TABLE IF NOT EXISTS proc
                     (timestamp INT, gpuid INT, pid INT,
                     mem_alloc INT, user CHAR)""")
 def store_gpu(gpu: list, timestamp: int, cur: any):
     cur.executemany(f"""INSERT INTO gpu VALUES({timestamp},
         :gpuid, :power_use, :power_max,
-        :mem_alloc, :mem_total, :util, :fan, :temp)""", gpu)
+        :mem_alloc, :mem_total, :util, :fan, :temp, :mode)""", gpu)
 
 def store_proc(proc: list, timestamp: int, cur: any):
     cur.executemany(f"""INSERT INTO proc VALUES({timestamp},
@@ -70,6 +70,7 @@ def gpustats():
             power_info = [ c for c in line.split("|")[1].split(' ') if c != '' ]
             fan_info = int(power_info[0].replace('%', ''))
             temp_info = int(power_info[1].replace('C', ''))
+            mode_info = power_info[2]
             power_usage = int(power_info[3].replace("W", ""))
             power_max = int(power_info[5].replace("W", ""))
 
@@ -80,6 +81,7 @@ def gpustats():
 
             item = {
                 'gpuid': gpu_idx,
+                'mode': mode_info,
                 'power_use': power_usage,
                 'power_max': power_max,
                 'mem_use_perc': round(100*mem_alloc/mem_total),
@@ -164,6 +166,7 @@ def watch_stats(args):
         db.close()
 
 def gather_stats(args):
+    print(f"Starting {__file__} at {datetime.datetime.now()}...")
     try:
         fl = FileLock('.lock', timeout=1)
         fl.acquire()
@@ -171,7 +174,6 @@ def gather_stats(args):
         print(f"Lockfile found, {__file__} is already running.")
         return
 
-    print(f"Starting {__file__}...")
     db = sqlite3.connect("gpustats.db", isolation_level=None)
     prepare_db(db)
 
