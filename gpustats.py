@@ -207,9 +207,9 @@ def gather_stats(args):
 def main():
     parser = argparse.ArgumentParser()
     cmds = parser.add_mutually_exclusive_group()
-    cmds.add_argument("-g", "--gather", action="store_true", default=True,
+    cmds.add_argument("-g", "--gather", action="store_true",
             help="Keep gathering stats and store them to sqlite")
-    cmds.add_argument("-w", "--watch", action="store_true",
+    cmds.add_argument("-w", "--watch", action="store_true", default=True,
             help="Watch latest values.")
 
     args = parser.parse_args()

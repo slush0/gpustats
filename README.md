@@ -9,7 +9,7 @@ If other instance is running, the script finish instantly.
 
 For quick run without any hassle with systemd, let's add this into crontab:
 ```
-0 *  * * * cd <gpustats workdir>/ && ./gpustats.py
+0 *  * * * cd <gpustats workdir>/ && ./gpustats.py --gather
 ```
 
 Alternatively, you can use gpustats.service as systemd launcher.
