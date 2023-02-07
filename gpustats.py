@@ -7,7 +7,8 @@ import datetime
 import subprocess
 from pprint import pprint
 from prettytable import PrettyTable
-from filelock import FileLock, Timeout
+from pid.decorator import pidfile
+from pid.base import PidFileAlreadyLockedError
 
 DELAY=10 # seconds
 WATCH_HISTORY=6 # How many entries show at once
@@ -18,18 +19,18 @@ def prepare_db(cur):
                     (timestamp INT, gpuid INT,
                     power_use INT, power_max INT,
                     mem_alloc INT, mem_total INT,
-                    util INT, fan INT, temp INT, mode CHAR)""")
+                    util INT, fan INT, temp INT, mode CHAR, interval INT)""")
     cur.execute("""CREATE TABLE IF NOT EXISTS proc
                     (timestamp INT, gpuid INT, pid INT,
-                    mem_alloc INT, user CHAR)""")
+                    mem_alloc INT, user CHAR, interval INT)""")
 def store_gpu(gpu: list, timestamp: int, cur: any):
     cur.executemany(f"""INSERT INTO gpu VALUES({timestamp},
         :gpuid, :power_use, :power_max,
-        :mem_alloc, :mem_total, :util, :fan, :temp, :mode)""", gpu)
+        :mem_alloc, :mem_total, :util, :fan, :temp, :mode, {DELAY})""", gpu)
 
 def store_proc(proc: list, timestamp: int, cur: any):
     cur.executemany(f"""INSERT INTO proc VALUES({timestamp},
-        :gpuid, :pid, :mem_alloc, :user)""", proc)
+        :gpuid, :pid, :mem_alloc, :user, {DELAY})""", proc)
 
 def gpustats():
     """Original idea https://github.com/serengil/gpuutils"""
@@ -165,14 +166,9 @@ def watch_stats(args):
     finally:
         db.close()
 
+@pidfile('gpustats.pid')
 def gather_stats(args):
     print(f"Starting {__file__} at {datetime.datetime.now()}...")
-    try:
-        fl = FileLock('.lock', timeout=1)
-        fl.acquire()
-    except Timeout:
-        print(f"Lockfile found, {__file__} is already running.")
-        return
 
     db = sqlite3.connect("gpustats.db", isolation_level=None)
     prepare_db(db)
@@ -214,10 +210,14 @@ def main():
 
     args = parser.parse_args()
 
-    if args.watch:
-        watch_stats(args)
-    elif args.gather:
+    if args.gather:
         gather_stats(args)
+    elif args.watch:
+        watch_stats(args)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except PidFileAlreadyLockedError:
+        print(f"Lockfile found, {__file__} is already running.")
+ 
